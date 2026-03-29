@@ -14,15 +14,11 @@ class Checkers6x6(AECEnv):
         self.possible_agents = ["player_0", "player_1"]
         self.render_mode = render_mode
         
-        # Create 6x6 board
-        self.board = None
-        
-    def reset(self, seed=None, options=None):
-        """Reset the environment to initial state"""
-        # Set active agents
-        self.agents = self.possible_agents[:]
-        
-        # Initialize board with pieces
+        self._initialize_board()
+
+    def _initialize_board(self):
+        """Helper function to set up pieces"""
+        # Reset board to zeros
         self.board = np.zeros((6, 6), dtype=np.int8)
         
         # Player 0 pieces (bottom)
@@ -36,6 +32,14 @@ class Checkers6x6(AECEnv):
             for col in range(6):
                 if (row + col) % 2 == 1:
                     self.board[row, col] = -1
+        
+    def reset(self, seed=None, options=None):
+        """Reset the environment to initial state"""
+        # Set active agents
+        self.agents = self.possible_agents[:]
+        
+        # Re-initialize board with pieces
+        self._initialize_board()
         
         # Initialize rewards, terminations, truncations, infos
         self.rewards = {agent: 0 for agent in self.agents}
@@ -84,146 +88,107 @@ class Checkers6x6(AECEnv):
             print(row_str)
         print()
 
-    def is_valid_move(self, from_pos, to_pos, player):
+    
+    def get_moves_for_piece(self, pos, player):
         """
-        Check if a move is valid using the 4 diagonal directions
+        Get all valid moves for a piece at a given position
         
         Args:
-            from_pos: tuple (row, col) - starting position
-            to_pos: tuple (row, col) - ending position
-            player: 0 or 1 - which player is moving
+            pos: tuple (row, col) - piece position
+            player: 0 or 1 - which player owns the piece
         
         Returns:
-            bool: True if move is valid, False otherwise
+            list of tuples: [(to_row, to_col), ...] - all valid destination positions
         """
-        from_row, from_col = from_pos
-        to_row, to_col = to_pos
+        row, col = pos
+        piece = self.board[row, col]
         
-        # Get the piece at starting position
-        piece = self.board[from_row, from_col]
-        
-        # Check if piece belongs to current player
+        # Check if piece belongs to player (can we removed; check function get_player_pieces )
         if player == 0 and piece <= 0:
-            return False
+            return []
         if player == 1 and piece >= 0:
-            return False
-        
-        # Check if destination is empty
-        if self.board[to_row, to_col] != 0:
-            return False
+            return []
         
         is_king = abs(piece) == 2
+        valid_moves = []
         
-        # Define possible moves: (row_offset, col_offset)
+        # Define possible directions
         if is_king:
-            # Kings can move in all 4 diagonal directions
-            possible_moves = [
-                (1, 1), (1, -1),   # Forward diagonals
-                (-1, 1), (-1, -1)  # Backward diagonals
-            ]
+            directions = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
         else:
-            # Regular pieces move forward only
-            if player == 0:  # Player 0 moves up
-                possible_moves = [(1, 1), (1, -1)]
-            else:  # Player 1 moves down
-                possible_moves = [(-1, 1), (-1, -1)]
+            if player == 0:
+                directions = [(1, 1), (1, -1)]  # Move up
+            else:
+                directions = [(-1, 1), (-1, -1)]  # Move down
         
-        row_diff = to_row - from_row
-        col_diff = to_col - from_col
-        
-        # Check for simple move (1 square diagonally)
-        if (row_diff, col_diff) in possible_moves:
-            return True
-        
-        # Check for jump move (2 squares diagonally)
-        for dr, dc in possible_moves:
-            if (row_diff, col_diff) == (2*dr, 2*dc):
-                # Check if there's an opponent piece in the middle
-                mid_row = from_row + dr
-                mid_col = from_col + dc
+        # Check each direction
+        for dr, dc in directions:
+            # Simple move (1 square)
+            to_row = row + dr
+            to_col = col + dc
+            
+            if 0 <= to_row < 6 and 0 <= to_col < 6:
+                if self.board[to_row, to_col] == 0:  # Empty square
+                    valid_moves.append((to_row, to_col))
+            
+            # Jump move (2 squares)
+            jump_row = row + 2 * dr
+            jump_col = col + 2 * dc
+            mid_row = row + dr
+            mid_col = col + dc
+            
+            if 0 <= jump_row < 6 and 0 <= jump_col < 6:
                 mid_piece = self.board[mid_row, mid_col]
+                landing = self.board[jump_row, jump_col]
                 
-                # Valid jump if middle has opponent piece
-                if player == 0 and mid_piece < 0:
-                    return True
-                if player == 1 and mid_piece > 0:
-                    return True
+                # Valid jump: opponent in middle, empty landing
+                if landing == 0:
+                    if player == 0 and mid_piece < 0:  # Capture player 1's piece
+                        valid_moves.append((jump_row, jump_col))
+                    elif player == 1 and mid_piece > 0:  # Capture player 0's piece
+                        valid_moves.append((jump_row, jump_col))
         
-        return False
-        
-    def get_valid_moves(self, player):
+        return valid_moves
+
+    def get_player_pieces(self, player):
         """
-        Get all valid moves for a player
+        Get positions of all pieces belonging to a player
         
         Args:
             player: 0 or 1 - which player
         
         Returns:
-            list of tuples: [(from_pos, to_pos), ...] where each is ((from_row, from_col), (to_row, to_col))
+            list of tuples: [(row, col), ...] - positions of all player's pieces
         """
-        valid_moves = []
+        pieces = []
         
-        # Find all pieces belonging to the player
         for row in range(6):
             for col in range(6):
                 piece = self.board[row, col]
                 
-                # Check if this piece belongs to current player
-                if player == 0 and piece > 0:  # Player 0 pieces (1 or 2)
-                    moves = self._get_piece_moves((row, col), player)
-                    valid_moves.extend(moves)
-                elif player == 1 and piece < 0:  # Player 1 pieces (-1 or -2)
-                    moves = self._get_piece_moves((row, col), player)
-                    valid_moves.extend(moves)
+                # Player 0 has positive values (1 or 2)
+                if player == 0 and piece > 0:
+                    pieces.append((row, col))
+                
+                # Player 1 has negative values (-1 or -2)
+                elif player == 1 and piece < 0:
+                    pieces.append((row, col))
         
-        return valid_moves
+        return pieces
 
 
-    def _get_piece_moves(self, from_pos, player):
-        """
-        Get all valid moves for a single piece
-        
-        Args:
-            from_pos: tuple (row, col) - piece position
-            player: 0 or 1 - which player
-        
-        Returns:
-            list of tuples: [(from_pos, to_pos), ...]
-        """
-        from_row, from_col = from_pos
-        piece = self.board[from_row, from_col]
-        is_king = abs(piece) == 2
-        
-        moves = []
-        
-        # Define possible directions
-        if is_king:
-            # Kings can move in all 4 diagonal directions
-            directions = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
-        else:
-            # Regular pieces move forward only
-            if player == 0:
-                directions = [(1, 1), (1, -1)]  # Up
-            else:
-                directions = [(-1, 1), (-1, -1)]  # Down
-        
-        # Check each direction for simple moves and jumps
-        for dr, dc in directions:
-            # Simple move (1 square)
-            to_row = from_row + dr
-            to_col = from_col + dc
-            if 0 <= to_row < 6 and 0 <= to_col < 6:
-                if self.is_valid_move(from_pos, (to_row, to_col), player):
-                    moves.append((from_pos, (to_row, to_col)))
-            
-            # Jump move (2 squares)
-            to_row = from_row + 2 * dr
-            to_col = from_col + 2 * dc
-            if 0 <= to_row < 6 and 0 <= to_col < 6:
-                if self.is_valid_move(from_pos, (to_row, to_col), player):
-                    moves.append((from_pos, (to_row, to_col)))
-        
-        return moves
+# Example usage:
+# player_0_pieces = env.get_player_pieces(0)
+# print(f"Player 0 pieces at: {player_0_pieces}")
+# Output: [(0, 1), (0, 3), (0, 5), (1, 0), (1, 2), (1, 4)]
+
+# Then get all moves:
+# all_moves = []
+# for piece_pos in player_0_pieces:
+#     moves = env.get_moves_for_piece(piece_pos, player=0)
+#     for move in moves:
+#         all_moves.append((piece_pos, move))
+# print(f"All possible moves: {all_moves}")
 
 
 
