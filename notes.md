@@ -1,5 +1,16 @@
 # Environment Info
 
+
+https://gymnasium.farama.org/introduction/create_custom_env/
+https://ale.farama.org/environments/video_checkers/
+
+
+Turn-based game (one player moves at a time)
+Natural sequential flow
+Easy to handle mandatory jumps
+Clear separation of agent actions
+
+
 ### 🎯 What skill should the agent learn?
 
 - Navigate through a maze? No
@@ -33,3 +44,4 @@ left diagonal up, right diagonal up, left diagonal down, right diagonal down
 - Task completion (success/failure)? yes, both
 - Time limits? no
 - Safety constraints? no
+
