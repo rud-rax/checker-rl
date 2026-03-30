@@ -139,11 +139,11 @@ class Checkers6x6(AECEnv):
             0: '·', 1: '○', 2: '⊙', -1: '●', -2: '⊗'
         }
         
-        print("\n  a b c d e f")
+        print("\n  0 1 2 3 4 5")
         print("  ───────────")
         
         for row in range(5, -1, -1):
-            row_str = f"{row + 1}│"
+            row_str = f"{row}│"
             for col in range(6):
                 row_str += symbols[board[row, col]] + " "
             print(row_str)
