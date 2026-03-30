@@ -134,9 +134,7 @@ class Checkers6x6(AECEnv):
 
     def print_board(self, board):
         """Print board with chess coordinates"""
-        symbols = {
-            0: '·', 1: '○', 2: '⊙', -1: '●', -2: '⊗'
-        }
+        symbols = {0: "·", 1: "○", 2: "⊙", -1: "●", -2: "⊗"}
 
         print("\n  0 1 2 3 4 5")
         print("  ───────────")

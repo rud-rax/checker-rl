@@ -2,6 +2,7 @@
 
 from mycheckersenv import Checkers6x6
 
+
 if __name__ == "__main__":
     print("=" * 60)
     print("Testing 6x6 Checkers Environment")
