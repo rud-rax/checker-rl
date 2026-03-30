@@ -94,6 +94,30 @@ class Checkers6x6(AECEnv):
         # Check if game is over
         self._check_game_over()
 
+    def last(self, observe=True):
+        agent = self.agent_selection
+
+        # observation for current agent
+        if observe:
+            obs = {
+                "board": self.board.copy(),
+                "action_mask": self.get_action_mask(agent)
+            }
+        else:
+            obs = None
+
+        # reward for current agent
+        reward = self.rewards[agent]
+
+        # termination / truncation flags
+        terminated = self.terminations[agent]
+        truncated = self.truncations[agent]
+
+        # optional info dict
+        info = self.infos.get(agent, {})
+
+        return obs, reward, terminated, truncated, info
+
     def _check_game_over(self):
         """Check if current agent has any valid moves"""
         current_player = 0 if self.agent_selection == "player_0" else 1
@@ -115,13 +139,25 @@ class Checkers6x6(AECEnv):
             # Game continues - no rewards yet
             self.rewards = {agent: 0 for agent in self.agents}
 
+    # Update observe() to include action mask:
     def observe(self, agent):
         """Return observation for given agent"""
-        return self.board.copy()
+        player = 0 if agent == "player_0" else 1
+        
+        observation = {
+            'observation': self.board.copy(),
+            'action_mask': self.get_action_mask(player)
+        }
+        
+        return observation
 
+    # Update observation_space to match:
     def observation_space(self, agent):
         """Define observation space"""
-        return spaces.Box(low=-2, high=2, shape=(6, 6), dtype=np.int8)
+        return spaces.Dict({
+            'observation': spaces.Box(low=-2, high=2, shape=(6, 6), dtype=np.int8),
+            'action_mask': spaces.Box(low=0, high=1, shape=(1296,), dtype=np.int8)
+        })
 
     def action_space(self, agent):
         """Define action space - single number from 0-1295"""
@@ -280,6 +316,34 @@ class Checkers6x6(AECEnv):
         to_pos = (to_row, to_col)
 
         return (from_pos, to_pos)
+    
+    def get_action_mask(self, player):
+        """
+        Get binary mask of valid actions for a player
+        
+        Args:
+            player: 0 or 1 - which player
+        
+        Returns:
+            np.array: binary array of length 1296 (1=valid, 0=invalid)
+        """
+        mask = np.zeros(1296, dtype=np.int8)
+        
+        # Get all player's pieces
+        player_pieces = self.get_player_pieces(player)
+        
+        # For each piece, get valid moves and mark them in mask
+        for piece_pos in player_pieces:
+            valid_moves = self.get_moves_for_piece(piece_pos, player)
+            
+            for to_pos in valid_moves:
+                # Encode the action and set mask to 1
+                action = self.encode_action(piece_pos, to_pos)
+                mask[action] = 1
+        
+        return mask
+
+
 
 
 if __name__ == "__main__":
