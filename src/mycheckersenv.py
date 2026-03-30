@@ -50,10 +50,71 @@ class Checkers6x6(AECEnv):
         # Agent selector for turn management
         self._agent_selector = agent_selector.agent_selector(self.agents)
         self.agent_selection = self._agent_selector.reset()
-        
+
     def step(self, action):
-        """Execute one step - to be implemented later"""
-        pass
+        """
+        Execute one step in the environment
+        
+        Args:
+            action: tuple ((from_row, from_col), (to_row, to_col))
+        """
+        # Get current agent and player
+        current_agent = self.agent_selection
+        current_player = 0 if current_agent == "player_0" else 1
+        
+        # Execute the move
+        from_pos, to_pos = action
+        from_row, from_col = from_pos
+        to_row, to_col = to_pos
+        
+        # Get the piece
+        piece = self.board[from_row, from_col]
+        
+        # Check if it's a jump (capture)
+        row_diff = abs(to_row - from_row)
+        if row_diff == 2:
+            # It's a jump - remove captured piece
+            mid_row = (from_row + to_row) // 2
+            mid_col = (from_col + to_col) // 2
+            self.board[mid_row, mid_col] = 0  # Remove captured piece
+        
+        # Move the piece
+        self.board[to_row, to_col] = piece
+        self.board[from_row, from_col] = 0
+        
+        # Check for king promotion
+        if current_player == 0 and to_row == 5 and piece == 1:
+            self.board[to_row, to_col] = 2  # Promote to king
+        elif current_player == 1 and to_row == 0 and piece == -1:
+            self.board[to_row, to_col] = -2  # Promote to king
+        
+        # Switch to next agent
+        self.agent_selection = self._agent_selector.next()
+        
+        # Check if game is over
+        self._check_game_over()
+
+
+    def _check_game_over(self):
+        """Check if current agent has any valid moves"""
+        current_player = 0 if self.agent_selection == "player_0" else 1
+        player_pieces = self.get_player_pieces(current_player)
+        
+        has_moves = False
+        for piece_pos in player_pieces:
+            if len(self.get_moves_for_piece(piece_pos, current_player)) > 0:
+                has_moves = True
+                break
+        
+        if not has_moves:
+            # Current player has no moves - they lose
+            opponent = 1 - current_player
+            self.rewards[f"player_{opponent}"] = 1
+            self.rewards[f"player_{current_player}"] = -1
+            self.terminations = {agent: True for agent in self.agents}
+        else:
+            # Game continues - no rewards yet
+            self.rewards = {agent: 0 for agent in self.agents}
     
     def observe(self, agent):
         """Return observation for given agent"""
@@ -199,3 +260,4 @@ if __name__ == "__main__":
     env = Checkers6x6(render_mode="human")
     env.reset()
     env.render()
+    
