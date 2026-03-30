@@ -153,6 +153,7 @@ class Checkers6x6(AECEnv):
     def get_moves_for_piece(self, pos, player):
         """
         Get all valid moves for a piece at a given position
+        WITH MANDATORY JUMP RULE: If jumps available, return ONLY jumps
         
         Args:
             pos: tuple (row, col) - piece position
@@ -164,14 +165,15 @@ class Checkers6x6(AECEnv):
         row, col = pos
         piece = self.board[row, col]
         
-        # Check if piece belongs to player (can we removed; check function get_player_pieces )
+        # Check if piece belongs to player
         if player == 0 and piece <= 0:
             return []
         if player == 1 and piece >= 0:
             return []
         
         is_king = abs(piece) == 2
-        valid_moves = []
+        simple_moves = []
+        jump_moves = []
         
         # Define possible directions
         if is_king:
@@ -190,7 +192,7 @@ class Checkers6x6(AECEnv):
             
             if 0 <= to_row < 6 and 0 <= to_col < 6:
                 if self.board[to_row, to_col] == 0:  # Empty square
-                    valid_moves.append((to_row, to_col))
+                    simple_moves.append((to_row, to_col))
             
             # Jump move (2 squares)
             jump_row = row + 2 * dr
@@ -205,11 +207,15 @@ class Checkers6x6(AECEnv):
                 # Valid jump: opponent in middle, empty landing
                 if landing == 0:
                     if player == 0 and mid_piece < 0:  # Capture player 1's piece
-                        valid_moves.append((jump_row, jump_col))
+                        jump_moves.append((jump_row, jump_col))
                     elif player == 1 and mid_piece > 0:  # Capture player 0's piece
-                        valid_moves.append((jump_row, jump_col))
+                        jump_moves.append((jump_row, jump_col))
         
-        return valid_moves
+        # MANDATORY JUMP RULE: If jumps exist, return ONLY jumps
+        if len(jump_moves) > 0:
+            return jump_moves
+        else:
+            return simple_moves
 
     def get_player_pieces(self, player):
         """
