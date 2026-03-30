@@ -244,24 +244,7 @@ class Checkers6x6(AECEnv):
         return pieces
 
 
-# Example usage:
-# player_0_pieces = env.get_player_pieces(0)
-# print(f"Player 0 pieces at: {player_0_pieces}")
-# Output: [(0, 1), (0, 3), (0, 5), (1, 0), (1, 2), (1, 4)]
 
-# Then get all moves:
-# all_moves = []
-# for piece_pos in player_0_pieces:
-#     moves = env.get_moves_for_piece(piece_pos, player=0)
-#     for move in moves:
-#         all_moves.append((piece_pos, move))
-# print(f"All possible moves: {all_moves}")
-
-
-
-
-
-# Usage example
 if __name__ == "__main__":
     env = Checkers6x6(render_mode="human")
     env.reset()

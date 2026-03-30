@@ -1,17 +1,17 @@
 # Implementation Checklist
 ## Phase 1: Core Mechanics
 
-- [ ] Initialize 6x6 board correctly
-- [ ] Implement diagonal move validation
-- [ ] Implement jump/capture logic
-- [ ] Handle mandatory jumping rule
-- [ ] King promotion logic
+- [x] Initialize 6x6 board correctly
+- [x] Implement diagonal move validation
+- [x] Implement jump/capture logic
+- [x] Handle mandatory jumping rule
+- [x] King promotion logic
 - [ ] Turn switching
 
 ## Phase 2: AEC Integration
 
-- [ ] Define observation/action spaces
-- [ ] Implement reset()
+- [x] Define observation/action spaces
+- [x] Implement reset()
 - [ ] Implement step(action)
 - [ ] Implement observe(agent)
 - [ ] Handle action masking
