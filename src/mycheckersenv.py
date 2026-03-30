@@ -6,47 +6,47 @@ from gymnasium import spaces
 
 class Checkers6x6(AECEnv):
     metadata = {"render_modes": ["human"], "name": "checkers_6x6_v0"}
-    
+
     def __init__(self, render_mode=None):
         super().__init__()
-        
+
         # Define the two players
         self.possible_agents = ["player_0", "player_1"]
         self.render_mode = render_mode
-        
+
         self._initialize_board()
 
     def _initialize_board(self):
         """Helper function to set up pieces"""
         # Reset board to zeros
         self.board = np.zeros((6, 6), dtype=np.int8)
-        
+
         # Player 0 pieces (bottom)
         for row in range(2):
             for col in range(6):
                 if (row + col) % 2 == 1:
                     self.board[row, col] = 1
-        
+
         # Player 1 pieces (top)
         for row in range(4, 6):
             for col in range(6):
                 if (row + col) % 2 == 1:
                     self.board[row, col] = -1
-        
+
     def reset(self, seed=None, options=None):
         """Reset the environment to initial state"""
         # Set active agents
         self.agents = self.possible_agents[:]
-        
+
         # Re-initialize board with pieces
         self._initialize_board()
-        
+
         # Initialize rewards, terminations, truncations, infos
         self.rewards = {agent: 0 for agent in self.agents}
         self.terminations = {agent: False for agent in self.agents}
         self.truncations = {agent: False for agent in self.agents}
         self.infos = {agent: {} for agent in self.agents}
-        
+
         # Agent selector for turn management
         self._agent_selector = agent_selector.agent_selector(self.agents)
         self.agent_selection = self._agent_selector.reset()
@@ -54,22 +54,22 @@ class Checkers6x6(AECEnv):
     def step(self, action):
         """
         Execute one step in the environment
-        
+
         Args:
-            action: tuple ((from_row, from_col), (to_row, to_col))
+            action: int (0-1295) - encoded action
         """
         # Get current agent and player
         current_agent = self.agent_selection
         current_player = 0 if current_agent == "player_0" else 1
-        
-        # Execute the move
-        from_pos, to_pos = action
+
+        # Decode action
+        from_pos, to_pos = self.decode_action(action)
         from_row, from_col = from_pos
         to_row, to_col = to_pos
-        
+
         # Get the piece
         piece = self.board[from_row, from_col]
-        
+
         # Check if it's a jump (capture)
         row_diff = abs(to_row - from_row)
         if row_diff == 2:
@@ -77,35 +77,34 @@ class Checkers6x6(AECEnv):
             mid_row = (from_row + to_row) // 2
             mid_col = (from_col + to_col) // 2
             self.board[mid_row, mid_col] = 0  # Remove captured piece
-        
+
         # Move the piece
         self.board[to_row, to_col] = piece
         self.board[from_row, from_col] = 0
-        
+
         # Check for king promotion
         if current_player == 0 and to_row == 5 and piece == 1:
             self.board[to_row, to_col] = 2  # Promote to king
         elif current_player == 1 and to_row == 0 and piece == -1:
             self.board[to_row, to_col] = -2  # Promote to king
-        
+
         # Switch to next agent
         self.agent_selection = self._agent_selector.next()
-        
+
         # Check if game is over
         self._check_game_over()
-
 
     def _check_game_over(self):
         """Check if current agent has any valid moves"""
         current_player = 0 if self.agent_selection == "player_0" else 1
         player_pieces = self.get_player_pieces(current_player)
-        
+
         has_moves = False
         for piece_pos in player_pieces:
             if len(self.get_moves_for_piece(piece_pos, current_player)) > 0:
                 has_moves = True
                 break
-        
+
         if not has_moves:
             # Current player has no moves - they lose
             opponent = 1 - current_player
@@ -115,33 +114,33 @@ class Checkers6x6(AECEnv):
         else:
             # Game continues - no rewards yet
             self.rewards = {agent: 0 for agent in self.agents}
-    
+
     def observe(self, agent):
         """Return observation for given agent"""
         return self.board.copy()
-    
+
     def observation_space(self, agent):
         """Define observation space"""
         return spaces.Box(low=-2, high=2, shape=(6, 6), dtype=np.int8)
-    
+
     def action_space(self, agent):
-        """Define action space - simplified for now"""
-        return spaces.Discrete(64)  # Placeholder
-    
+        """Define action space - single number from 0-1295"""
+        return spaces.Discrete(1296)  # 6*6*6*6 = 1296
+
     def render(self):
         """Render the board"""
         if self.render_mode == "human":
             self.print_board(self.board)
-    
+
     def print_board(self, board):
         """Print board with chess coordinates"""
         symbols = {
             0: '·', 1: '○', 2: '⊙', -1: '●', -2: '⊗'
         }
-        
+
         print("\n  0 1 2 3 4 5")
         print("  ───────────")
-        
+
         for row in range(5, -1, -1):
             row_str = f"{row}│"
             for col in range(6):
@@ -149,32 +148,31 @@ class Checkers6x6(AECEnv):
             print(row_str)
         print()
 
-    
     def get_moves_for_piece(self, pos, player):
         """
         Get all valid moves for a piece at a given position
         WITH MANDATORY JUMP RULE: If jumps available, return ONLY jumps
-        
+
         Args:
             pos: tuple (row, col) - piece position
             player: 0 or 1 - which player owns the piece
-        
+
         Returns:
             list of tuples: [(to_row, to_col), ...] - all valid destination positions
         """
         row, col = pos
         piece = self.board[row, col]
-        
+
         # Check if piece belongs to player
         if player == 0 and piece <= 0:
             return []
         if player == 1 and piece >= 0:
             return []
-        
+
         is_king = abs(piece) == 2
         simple_moves = []
         jump_moves = []
-        
+
         # Define possible directions
         if is_king:
             directions = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
@@ -183,34 +181,34 @@ class Checkers6x6(AECEnv):
                 directions = [(1, 1), (1, -1)]  # Move up
             else:
                 directions = [(-1, 1), (-1, -1)]  # Move down
-        
+
         # Check each direction
         for dr, dc in directions:
             # Simple move (1 square)
             to_row = row + dr
             to_col = col + dc
-            
+
             if 0 <= to_row < 6 and 0 <= to_col < 6:
                 if self.board[to_row, to_col] == 0:  # Empty square
                     simple_moves.append((to_row, to_col))
-            
+
             # Jump move (2 squares)
             jump_row = row + 2 * dr
             jump_col = col + 2 * dc
             mid_row = row + dr
             mid_col = col + dc
-            
+
             if 0 <= jump_row < 6 and 0 <= jump_col < 6:
                 mid_piece = self.board[mid_row, mid_col]
                 landing = self.board[jump_row, jump_col]
-                
+
                 # Valid jump: opponent in middle, empty landing
                 if landing == 0:
                     if player == 0 and mid_piece < 0:  # Capture player 1's piece
                         jump_moves.append((jump_row, jump_col))
                     elif player == 1 and mid_piece > 0:  # Capture player 0's piece
                         jump_moves.append((jump_row, jump_col))
-        
+
         # MANDATORY JUMP RULE: If jumps exist, return ONLY jumps
         if len(jump_moves) > 0:
             return jump_moves
@@ -220,33 +218,73 @@ class Checkers6x6(AECEnv):
     def get_player_pieces(self, player):
         """
         Get positions of all pieces belonging to a player
-        
+
         Args:
             player: 0 or 1 - which player
-        
+
         Returns:
             list of tuples: [(row, col), ...] - positions of all player's pieces
         """
         pieces = []
-        
+
         for row in range(6):
             for col in range(6):
                 piece = self.board[row, col]
-                
+
                 # Player 0 has positive values (1 or 2)
                 if player == 0 and piece > 0:
                     pieces.append((row, col))
-                
+
                 # Player 1 has negative values (-1 or -2)
                 elif player == 1 and piece < 0:
                     pieces.append((row, col))
-        
+
         return pieces
 
+    def encode_action(self, from_pos, to_pos):
+        """
+        Encode a move into a single action number
+
+        Args:
+            from_pos: tuple (row, col)
+            to_pos: tuple (row, col)
+
+        Returns:
+            int: action number (0-1295)
+        """
+        from_row, from_col = from_pos
+        to_row, to_col = to_pos
+
+        # Encode as: from_row * 216 + from_col * 36 + to_row * 6 + to_col
+        action = from_row * 216 + from_col * 36 + to_row * 6 + to_col
+        return action
+
+    def decode_action(self, action):
+        """
+        Decode an action number into a move
+
+        Args:
+            action: int (0-1295)
+
+        Returns:
+            tuple: ((from_row, from_col), (to_row, to_col))
+        """
+        from_row = action // 216
+        action = action % 216
+
+        from_col = action // 36
+        action = action % 36
+
+        to_row = action // 6
+        to_col = action % 6
+
+        from_pos = (from_row, from_col)
+        to_pos = (to_row, to_col)
+
+        return (from_pos, to_pos)
 
 
 if __name__ == "__main__":
     env = Checkers6x6(render_mode="human")
     env.reset()
     env.render()
-    
