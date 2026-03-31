@@ -2,6 +2,7 @@ import numpy as np
 from pettingzoo import AECEnv
 from pettingzoo.utils import agent_selector
 from gymnasium import spaces
+import functools
 
 
 class Checkers6x6(AECEnv):
@@ -43,6 +44,7 @@ class Checkers6x6(AECEnv):
 
         # Initialize rewards, terminations, truncations, infos
         self.rewards = {agent: 0 for agent in self.agents}
+        self._cumulative_rewards = {agent: 0 for agent in self.agents}
         self.terminations = {agent: False for agent in self.agents}
         self.truncations = {agent: False for agent in self.agents}
         self.infos = {agent: {} for agent in self.agents}
@@ -61,6 +63,12 @@ class Checkers6x6(AECEnv):
         # Get current agent and player
         current_agent = self.agent_selection
         current_player = 0 if current_agent == "player_0" else 1
+            
+        # Handle termination - if action is None, just switch to next agent
+        if self.terminations[current_agent] or self.truncations[current_agent]:
+            # Agent is already terminated, just switch
+            self.agent_selection = self._agent_selector.next()
+            return
 
         # Decode action
         from_pos, to_pos = self.decode_action(action)
@@ -88,35 +96,36 @@ class Checkers6x6(AECEnv):
         elif current_player == 1 and to_row == 0 and piece == -1:
             self.board[to_row, to_col] = -2  # Promote to king
 
+        # Check if game is over (this sets self.rewards)
+        self._check_game_over()
+        
+        # Accumulate rewards for current agent BEFORE switching
+        self._cumulative_rewards[current_agent] += self.rewards[current_agent]
+        
         # Switch to next agent
         self.agent_selection = self._agent_selector.next()
+        
+        # Clear rewards for next step (not cumulative rewards!)
+        self.rewards = {agent: 0 for agent in self.agents}
 
-        # Check if game is over
-        self._check_game_over()
 
     def last(self, observe=True):
+        """
+        Returns observation, cumulative reward, terminated, truncated, info for the current agent
+
+        This is called by the environment to get the last observation and reward
+        """
         agent = self.agent_selection
 
-        # observation for current agent
-        if observe:
-            obs = {
-                "board": self.board.copy(),
-                "action_mask": self.get_action_mask(agent)
-            }
-        else:
-            obs = None
+        observation = self.observe(agent) if observe else None
 
-        # reward for current agent
-        reward = self.rewards[agent]
-
-        # termination / truncation flags
-        terminated = self.terminations[agent]
-        truncated = self.truncations[agent]
-
-        # optional info dict
-        info = self.infos.get(agent, {})
-
-        return obs, reward, terminated, truncated, info
+        return (
+            observation,
+            self._cumulative_rewards[agent],
+            self.terminations[agent],
+            self.truncations[agent],
+            self.infos[agent],
+        )
 
     def _check_game_over(self):
         """Check if current agent has any valid moves"""
@@ -143,22 +152,26 @@ class Checkers6x6(AECEnv):
     def observe(self, agent):
         """Return observation for given agent"""
         player = 0 if agent == "player_0" else 1
-        
+
         observation = {
-            'observation': self.board.copy(),
-            'action_mask': self.get_action_mask(player)
+            "observation": self.board.copy(),
+            "action_mask": self.get_action_mask(player),
         }
-        
+
         return observation
 
     # Update observation_space to match:
+    @functools.lru_cache(maxsize=None)
     def observation_space(self, agent):
         """Define observation space"""
-        return spaces.Dict({
-            'observation': spaces.Box(low=-2, high=2, shape=(6, 6), dtype=np.int8),
-            'action_mask': spaces.Box(low=0, high=1, shape=(1296,), dtype=np.int8)
-        })
+        return spaces.Dict(
+            {
+                "observation": spaces.Box(low=-2, high=2, shape=(6, 6), dtype=np.int8),
+                "action_mask": spaces.Box(low=0, high=1, shape=(1296,), dtype=np.int8),
+            }
+        )
 
+    @functools.lru_cache(maxsize=None)
     def action_space(self, agent):
         """Define action space - single number from 0-1295"""
         return spaces.Discrete(1296)  # 6*6*6*6 = 1296
@@ -316,34 +329,32 @@ class Checkers6x6(AECEnv):
         to_pos = (to_row, to_col)
 
         return (from_pos, to_pos)
-    
+
     def get_action_mask(self, player):
         """
         Get binary mask of valid actions for a player
-        
+
         Args:
             player: 0 or 1 - which player
-        
+
         Returns:
             np.array: binary array of length 1296 (1=valid, 0=invalid)
         """
         mask = np.zeros(1296, dtype=np.int8)
-        
+
         # Get all player's pieces
         player_pieces = self.get_player_pieces(player)
-        
+
         # For each piece, get valid moves and mark them in mask
         for piece_pos in player_pieces:
             valid_moves = self.get_moves_for_piece(piece_pos, player)
-            
+
             for to_pos in valid_moves:
                 # Encode the action and set mask to 1
                 action = self.encode_action(piece_pos, to_pos)
                 mask[action] = 1
-        
+
         return mask
-
-
 
 
 if __name__ == "__main__":
