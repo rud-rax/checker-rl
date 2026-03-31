@@ -1,6 +1,6 @@
 # Test script - add this at the bottom of your file or in a separate test file
 import numpy as np
-from mycheckersenv import Checkers6x6
+from mycheckersenv import env
 
 # Test script - add this at the bottom or in a separate test file
 
@@ -10,7 +10,7 @@ if __name__ == "__main__":
     print("=" * 70)
     
     # Create environment
-    env = Checkers6x6(render_mode="human")
+    env = env(render_mode="human")
     env.reset()
     
     # TEST 1: Action Encoding/Decoding

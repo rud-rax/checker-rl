@@ -2,7 +2,9 @@ temp/
 *.pkl
 checkpoints/
 *.pth
-
+*.pkl
+*.png
+model/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
