@@ -1,27 +1,17 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 class Actor(nn.Module):
-    """
-    Actor Network (Policy)
-    Input: Board state (36 features)
-    Output: Action logits (1296 actions)
-    """
+    """Actor Network (Policy)"""
     def __init__(self, input_size=36, hidden_size=128, output_size=1296):
         super(Actor, self).__init__()
-        
         self.fc1 = nn.Linear(input_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.fc3 = nn.Linear(hidden_size, output_size)
         
     def forward(self, state):
-        """
-        Args:
-            state: Flattened board state, shape (batch_size, 36) or (36,)
-        Returns:
-            action_logits: Raw scores for each action, shape (batch_size, 1296) or (1296,)
-        """
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
         action_logits = self.fc3(x)
@@ -29,46 +19,108 @@ class Actor(nn.Module):
 
 
 class Critic(nn.Module):
-    """
-    Critic Network (Value Function)
-    Input: Board state (36 features)
-    Output: State value (single number)
-    """
+    """Critic Network (Value Function)"""
     def __init__(self, input_size=36, hidden_size=128):
         super(Critic, self).__init__()
-        
         self.fc1 = nn.Linear(input_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, 64)
         self.fc3 = nn.Linear(64, 1)
         
     def forward(self, state):
-        """
-        Args:
-            state: Flattened board state, shape (batch_size, 36) or (36,)
-        Returns:
-            value: State value, shape (batch_size, 1) or (1,)
-        """
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
         value = self.fc3(x)
         return value
 
 
-# Example usage:
-if __name__ == "__main__":
-    # Create networks
-    actor = Actor()
-    critic = Critic()
+class ActorCriticAgent:
+    """
+    Actor-Critic Agent for Checkers
+    Combines Actor and Critic networks with action selection
+    """
+    def __init__(self, learning_rate_actor=0.001, learning_rate_critic=0.001, gamma=0.99):
+        self.actor = Actor()
+        self.critic = Critic()
+        
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=learning_rate_actor)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=learning_rate_critic)
+        
+        self.gamma = gamma
+        
+    def select_action(self, state, action_mask, training=True):
+        """
+        Select an action using the actor network with action masking
+        
+        Args:
+            state: Board state, numpy array shape (6, 6)
+            action_mask: Binary mask, numpy array shape (1296,)
+            training: If True, sample. If False, greedy.
+        
+        Returns:
+            action: Selected action (integer)
+            log_prob: Log probability of action
+        """
+        # Convert to tensors
+        state_tensor = torch.FloatTensor(state).flatten().unsqueeze(0)  # (1, 36)
+        action_mask_tensor = torch.FloatTensor(action_mask)  # (1296,)
+        
+        # Get logits
+        with torch.no_grad() if not training else torch.enable_grad():
+            action_logits = self.actor(state_tensor).squeeze(0)  # (1296,)
+        
+        # Apply mask
+        masked_logits = action_logits.clone()
+        masked_logits[action_mask_tensor == 0] = -1e8
+        
+        # Get probabilities
+        action_probs = F.softmax(masked_logits, dim=0)
+        
+        if training:
+            # Sample from distribution
+            action_dist = torch.distributions.Categorical(action_probs)
+            action = action_dist.sample()
+            log_prob = action_dist.log_prob(action)
+        else:
+            # Greedy
+            action = torch.argmax(action_probs)
+            log_prob = torch.log(action_probs[action])
+        
+        return action.item(), log_prob
     
-    # Test with dummy input
-    dummy_state = torch.randn(1, 36)  # Batch size 1, 36 features
+    def get_value(self, state):
+        """
+        Get state value from critic
+        
+        Args:
+            state: Board state, numpy array shape (6, 6)
+        
+        Returns:
+            value: State value
+        """
+        state_tensor = torch.FloatTensor(state).flatten().unsqueeze(0)
+        value = self.critic(state_tensor)
+        return value.item()
     
-    # Forward pass
-    action_logits = actor(dummy_state)
-    state_value = critic(dummy_state)
+    def update(self, states, actions, advantages, returns):
+        """
+        Update actor and critic networks
+        To be implemented next
+        """
+        pass
     
-    print(f"Actor output shape: {action_logits.shape}")  # Should be (1, 1296)
-    print(f"Critic output shape: {state_value.shape}")    # Should be (1, 1)
+    def save(self, filepath):
+        """Save agent"""
+        torch.save({
+            'actor_state_dict': self.actor.state_dict(),
+            'critic_state_dict': self.critic.state_dict(),
+            'actor_optimizer': self.actor_optimizer.state_dict(),
+            'critic_optimizer': self.critic_optimizer.state_dict(),
+        }, filepath)
     
-    print(f"\nActor parameters: {sum(p.numel() for p in actor.parameters())}")
-    print(f"Critic parameters: {sum(p.numel() for p in critic.parameters())}")
+    def load(self, filepath):
+        """Load agent"""
+        checkpoint = torch.load(filepath)
+        self.actor.load_state_dict(checkpoint['actor_state_dict'])
+        self.critic.load_state_dict(checkpoint['critic_state_dict'])
+        self.actor_optimizer.load_state_dict(checkpoint['actor_optimizer'])
+        self.critic_optimizer.load_state_dict(checkpoint['critic_optimizer'])
