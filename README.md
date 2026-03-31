@@ -169,32 +169,6 @@ EPISODES = 20000    # Train longer
 ACTOR_LEARNING_RATE = 0.00005  # Different learning rate
 ```
 
----
-
-## Model Files
-
-**Checkpoint Structure:**
-
-Each `.pth` file contains:
-- Actor network weights
-- Critic network weights
-- Optimizer states (for resuming)
-- Episode number
-- Training metrics
-
-**Files Generated:**
-```
-model/V1/
-├── checkpoints/
-│   ├── agent_episode_500.pth
-│   ├── agent_episode_1000.pth
-│   ├── ...
-│   └── agent_final.pth
-├── training_state.pkl       # Full training history
-└── training_curves.png      # Visualization
-```
-
-
 ## References
 
 - **PettingZoo Documentation:** https://pettingzoo.farama.org/
