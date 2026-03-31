@@ -64,15 +64,21 @@ class raw_env(AECEnv):
         self._agent_selector = agent_selector.agent_selector(self.agents)
         self.agent_selection = self._agent_selector.next()
 
+        self.step_count = 0 
+        self.max_steps = 500
+
     def step(self, action):
         """Execute one step"""
         if self.terminations[self.agent_selection] or self.truncations[self.agent_selection]:
             self._was_dead_step(action)
             return
 
+        # Increment step counter
+        self.step_count += 1
+
         agent = self.agent_selection
         
-        # KEY PATTERN: Reset cumulative rewards for THIS agent at start of their turn
+        # Reset cumulative rewards for THIS agent at start of their turn
         self._cumulative_rewards[agent] = 0
 
         # Decode and execute action
@@ -82,12 +88,16 @@ class raw_env(AECEnv):
         
         piece = self.board[from_row, from_col]
         
+        # Track if piece was captured (for reward shaping)
+        piece_captured = False
+        
         # Handle jump
         row_diff = abs(to_row - from_row)
         if row_diff == 2:
             mid_row = (from_row + to_row) // 2
             mid_col = (from_col + to_col) // 2
             self.board[mid_row, mid_col] = 0
+            piece_captured = True
         
         # Move piece
         self.board[to_row, to_col] = piece
@@ -100,6 +110,9 @@ class raw_env(AECEnv):
         elif current_player == 1 and to_row == 0 and piece == -1:
             self.board[to_row, to_col] = -2
         
+        # Calculate shaped reward for this move
+        shaped_reward = self.calculate_reward(current_player, action, piece_captured)
+        
         # Check for game over BEFORE switching agents
         next_player = 1 - current_player
         next_player_pieces = self.get_player_pieces(next_player)
@@ -109,19 +122,26 @@ class raw_env(AECEnv):
                 has_moves = True
                 break
         
+        # Check for game termination or truncation
         if not has_moves:
             # Next player has no moves - current player wins
-            self.rewards[agent] = 1
-            self.rewards[self.agents[1 - self.agent_name_mapping[agent]]] = -1
+            self.rewards[agent] = 1.0 + shaped_reward
+            self.rewards[self.agents[1 - self.agent_name_mapping[agent]]] = -1.0
             self.terminations = {a: True for a in self.agents}
+        elif self.step_count >= self.max_steps:
+            # Game too long - truncate with draw
+            self.rewards[agent] = shaped_reward  # Keep shaped reward
+            self.rewards[self.agents[1 - self.agent_name_mapping[agent]]] = 0.0
+            self.truncations = {a: True for a in self.agents}
         else:
-            # No rewards this step
-            self._clear_rewards()
+            # Game continues - give shaped reward
+            self.rewards[agent] = shaped_reward
+            self._clear_rewards()  # Clear other agent's reward
         
         # Select next agent
         self.agent_selection = self._agent_selector.next()
         
-        # KEY PATTERN: Accumulate rewards AFTER setting them
+        # Accumulate rewards AFTER setting them
         self._accumulate_rewards()
         
         if self.render_mode == "human":
@@ -232,3 +252,34 @@ class raw_env(AECEnv):
                         jump_moves.append((jump_row, jump_col))
         
         return jump_moves if len(jump_moves) > 0 else simple_moves
+    
+    def calculate_reward(self, current_player, action, piece_captured):
+        """
+        Calculate reward for a move (Simple Shaping)
+        
+        Args:
+            current_player: 0 or 1
+            action: Action taken
+            piece_captured: Whether a piece was captured
+        
+        Returns:
+            reward: Immediate reward for this action
+        """
+        reward = 0.0
+        
+        # Reward for capturing opponent piece
+        if piece_captured:
+            reward += 0.5
+        
+        # Reward for king promotion
+        from_pos, to_pos = self.decode_action(action)
+        to_row, to_col = to_pos
+        piece = self.board[to_row, to_col]
+        
+        if abs(piece) == 2:  # Is a king
+            reward += 0.3
+        
+        # Small penalty for each move (encourage winning quickly)
+        reward -= 0.01
+        
+        return reward

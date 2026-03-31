@@ -1,8 +1,14 @@
+import os
+from pathlib import Path
 import pickle
 from mycheckersenv import env
 from myagent import ActorCriticAgent
 import numpy as np
 import matplotlib.pyplot as plt
+
+# change this is save model
+MODEL_NAME = "V1/"
+SAVE_MODEL_DIR = 'model/' + MODEL_NAME
 
 
 def compute_advantages_and_returns(rewards, values, next_value, gamma=0.99, done=False):
@@ -131,7 +137,7 @@ def plot_training_curves(rewards, lengths, actor_losses, critic_losses):
     axes[1, 1].set_ylabel("Loss")
 
     plt.tight_layout()
-    plt.savefig("training_curves.png")
+    plt.savefig(SAVE_MODEL_DIR + "training_curves.png")
     print("✓ Saved training curves to training_curves.png")
 
 
@@ -141,7 +147,7 @@ def save_training_state(
     lengths,
     actor_losses,
     critic_losses,
-    filepath="training_state.pkl",
+    filepath=SAVE_MODEL_DIR + "training_state.pkl",
 ):
     """Save training metrics"""
     state = {
@@ -252,7 +258,7 @@ def train(num_episodes=5000, save_interval=500, log_interval=100, resume_from=No
         if (episode + 1) % save_interval == 0:
             # Save agent weights
             agent.save(
-                f"checkpoints/agent_episode_{episode + 1}.pth",
+                SAVE_MODEL_DIR + f"checkpoints/agent_episode_{episode + 1}.pth",
                 episode=episode + 1,
                 metrics={"avg_reward": np.mean(episode_rewards[-100:])},
             )
@@ -267,7 +273,7 @@ def train(num_episodes=5000, save_interval=500, log_interval=100, resume_from=No
             )
 
     # Final save
-    agent.save("checkpoints/agent_final.pth", episode=num_episodes)
+    agent.save(SAVE_MODEL_DIR + "checkpoints/agent_final.pth", episode=num_episodes)
     save_training_state(
         num_episodes, episode_rewards, episode_lengths, actor_losses, critic_losses
     )
@@ -297,12 +303,17 @@ def train(num_episodes=5000, save_interval=500, log_interval=100, resume_from=No
 
 
 if __name__ == "__main__":
-    # Create checkpoints directory
-    import os
 
-    os.makedirs("checkpoints", exist_ok=True)
-
+    
+    # Change this line:
+    # os.makedirs('checkpoints', exist_ok=True)
+    
+    # To this:
+    os.makedirs(SAVE_MODEL_DIR, exist_ok=True)
+    
     # Train agent
     agent, rewards, lengths = train(
-        num_episodes=5000, save_interval=500, log_interval=100
+        num_episodes=5000,
+        save_interval=500,
+        log_interval=100
     )
