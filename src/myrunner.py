@@ -1,14 +1,27 @@
 import os
-from pathlib import Path
 import pickle
 from mycheckersenv import env
 from myagent import ActorCriticAgent
 import numpy as np
 import matplotlib.pyplot as plt
 
-# change this is save model
-MODEL_NAME = "V1/"
-SAVE_MODEL_DIR = 'model/' + MODEL_NAME
+
+# MODEL CONFIG 
+# ====================================
+MODEL_NAME = "V1/" 
+SAVE_MODEL_DIR = "model/" + MODEL_NAME
+
+ACTOR_LEARNING_RATE = 0.0001
+CRITIC_LEARNING_RATE = 0.0001
+GAMMA = 0.99
+
+EPISODES = 10000
+SAVE_INTERVAL = 500
+LOG_INTERVAL = 500
+
+RESUME_FROM = None
+# RESUME_FROM="model/V1/checkpoints/agent_final.pth"
+# ====================================
 
 
 def compute_advantages_and_returns(rewards, values, next_value, gamma=0.99, done=False):
@@ -38,6 +51,7 @@ def compute_advantages_and_returns(rewards, values, next_value, gamma=0.99, done
 
     return advantages, returns
 
+
 def play_episode(env, agent, training=True):
     """Play one full episode of self-play"""
     states = []
@@ -45,66 +59,68 @@ def play_episode(env, agent, training=True):
     values = []
     log_probs = []
     player_indices = []
-    
+
     env.reset()
-    
+
     for agent_name in env.agent_iter():
         obs, reward, termination, truncation, info = env.last()
         done = termination or truncation
-        
+
         if done:
             action = None
             # Capture final rewards BEFORE they're cleared
-            if not hasattr(env, '_final_rewards'):
+            if not hasattr(env, "_final_rewards"):
                 env._final_rewards = env.rewards.copy()
         else:
-            state = obs['observation']
-            action_mask = obs['action_mask']
-            
+            state = obs["observation"]
+            action_mask = obs["action_mask"]
+
             value = agent.get_value(state)
-            action, log_prob = agent.select_action(state, action_mask, training=training)
-            
+            action, log_prob = agent.select_action(
+                state, action_mask, training=training
+            )
+
             states.append(state)
             actions.append(action)
             values.append(value)
             log_probs.append(log_prob)
-            
+
             # Track which player made this move
             player_idx = 0 if agent_name == "player_0" else 1
             player_indices.append(player_idx)
-        
+
         env.step(action)
-    
+
     # Get final rewards (saved when game ended)
     final_rewards = env._final_rewards
-    
+
     # Clean up temporary attribute
-    delattr(env, '_final_rewards')
-    
+    delattr(env, "_final_rewards")
+
     # Assign rewards to each state-action pair
     rewards = []
     for player_idx in player_indices:
         player_name = f"player_{player_idx}"
         rewards.append(final_rewards[player_name])
-    
+
     # Compute advantages and returns
     next_value = 0
     advantages, returns = compute_advantages_and_returns(
         rewards, values, next_value, gamma=agent.gamma, done=True
     )
-    
+
     episode_data = {
-        'states': states,
-        'actions': actions,
-        'rewards': rewards,
-        'values': values,
-        'log_probs': log_probs,
-        'advantages': advantages,
-        'returns': returns,
-        'total_reward': final_rewards["player_0"],
-        'episode_length': len(states)
+        "states": states,
+        "actions": actions,
+        "rewards": rewards,
+        "values": values,
+        "log_probs": log_probs,
+        "advantages": advantages,
+        "returns": returns,
+        "total_reward": final_rewards["player_0"],
+        "episode_length": len(states),
     }
-    
+
     return episode_data
 
 
@@ -113,7 +129,7 @@ def plot_training_curves(rewards, lengths, actor_losses, critic_losses):
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
 
     # Rewards
-    axes[0, 0].scatter(rewards)
+    axes[0, 0].plot(rewards)
     axes[0, 0].set_title("Episode Rewards")
     axes[0, 0].set_xlabel("Episode")
     axes[0, 0].set_ylabel("Total Reward")
@@ -191,7 +207,7 @@ def train(num_episodes=5000, save_interval=500, log_interval=100, resume_from=No
     agent = ActorCriticAgent(
         learning_rate_actor=0.0001,  # Was 0.001, now 10x smaller
         learning_rate_critic=0.0001,  # Was 0.001, now 10x smaller
-        gamma=0.99
+        gamma=0.99,
     )
 
     # Tracking metrics
@@ -210,7 +226,7 @@ def train(num_episodes=5000, save_interval=500, log_interval=100, resume_from=No
         start_episode = episode if episode is not None else 0
 
         # Load training state
-        training_state = load_training_state()
+        training_state = load_training_state(SAVE_MODEL_DIR + "training_state.pkl")
         if training_state is not None:
             episode_rewards = training_state["episode_rewards"]
             episode_lengths = training_state["episode_lengths"]
@@ -288,32 +304,13 @@ def train(num_episodes=5000, save_interval=500, log_interval=100, resume_from=No
     return agent, episode_rewards, episode_lengths
 
 
-# if __name__ == "__main__":
-#     import os
-#     os.makedirs('checkpoints', exist_ok=True)
 
-#     # To start fresh training:
-#     agent, rewards, lengths = train(num_episodes=5000)
-
-#     # To resume from checkpoint:
-#     # agent, rewards, lengths = train(
-#     #     num_episodes=10000,
-#     #     resume_from="checkpoints/agent_episode_5000.pth"
-#     # )
 
 
 if __name__ == "__main__":
+    os.makedirs(SAVE_MODEL_DIR + "checkpoints", exist_ok=True)
 
-    
-    # Change this line:
-    # os.makedirs('checkpoints', exist_ok=True)
-    
-    # To this:
-    os.makedirs(SAVE_MODEL_DIR, exist_ok=True)
-    
     # Train agent
     agent, rewards, lengths = train(
-        num_episodes=5000,
-        save_interval=500,
-        log_interval=100
+        num_episodes=EPISODES, save_interval=SAVE_INTERVAL, log_interval=LOG_INTERVAL, resume_from="model/V1/checkpoints/agent_final.pth"
     )
