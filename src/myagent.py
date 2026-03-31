@@ -48,42 +48,41 @@ class ActorCriticAgent:
         self.gamma = gamma
         
     def select_action(self, state, action_mask, training=True):
-        """
-        Select an action using the actor network with action masking
+        """Select an action using the actor network with action masking"""
+        state_tensor = torch.FloatTensor(state).flatten().unsqueeze(0)
+        action_mask_tensor = torch.FloatTensor(action_mask)
         
-        Args:
-            state: Board state, numpy array shape (6, 6)
-            action_mask: Binary mask, numpy array shape (1296,)
-            training: If True, sample. If False, greedy.
-        
-        Returns:
-            action: Selected action (integer)
-            log_prob: Log probability of action
-        """
-        # Convert to tensors
-        state_tensor = torch.FloatTensor(state).flatten().unsqueeze(0)  # (1, 36)
-        action_mask_tensor = torch.FloatTensor(action_mask)  # (1296,)
-        
-        # Get logits
         with torch.no_grad() if not training else torch.enable_grad():
-            action_logits = self.actor(state_tensor).squeeze(0)  # (1296,)
+            action_logits = self.actor(state_tensor).squeeze(0)
         
         # Apply mask
         masked_logits = action_logits.clone()
         masked_logits[action_mask_tensor == 0] = -1e8
         
-        # Get probabilities
+        # Check for NaN
+        if torch.isnan(masked_logits).any():
+            print("WARNING: NaN detected in logits, using random valid action")
+            valid_actions = torch.where(action_mask_tensor == 1)[0]
+            action = valid_actions[torch.randint(len(valid_actions), (1,))].item()
+            return action, torch.tensor(0.0)
+        
+        # Get probabilities with numerical stability
         action_probs = F.softmax(masked_logits, dim=0)
         
+        # Check for NaN in probabilities
+        if torch.isnan(action_probs).any() or action_probs.sum() == 0:
+            print("WARNING: NaN in probabilities, using random valid action")
+            valid_actions = torch.where(action_mask_tensor == 1)[0]
+            action = valid_actions[torch.randint(len(valid_actions), (1,))].item()
+            return action, torch.tensor(0.0)
+        
         if training:
-            # Sample from distribution
             action_dist = torch.distributions.Categorical(action_probs)
             action = action_dist.sample()
             log_prob = action_dist.log_prob(action)
         else:
-            # Greedy
             action = torch.argmax(action_probs)
-            log_prob = torch.log(action_probs[action])
+            log_prob = torch.log(action_probs[action] + 1e-8)
         
         return action.item(), log_prob
     
@@ -102,25 +101,92 @@ class ActorCriticAgent:
         return value.item()
     
     def update(self, states, actions, advantages, returns):
+        """Update actor and critic networks"""
+        # Convert lists to tensors
+        states_tensor = torch.FloatTensor(np.array([s.flatten() for s in states]))
+        actions_tensor = torch.LongTensor(actions)
+        advantages_tensor = torch.FloatTensor(advantages).unsqueeze(1)
+        returns_tensor = torch.FloatTensor(returns).unsqueeze(1)
+        
+        # ============ UPDATE ACTOR ============
+        action_logits = self.actor(states_tensor)
+        action_probs = F.softmax(action_logits, dim=1)
+        log_probs = torch.log(action_probs.gather(1, actions_tensor.unsqueeze(1)) + 1e-8)  # Add small epsilon
+        
+        actor_loss = -(log_probs * advantages_tensor.detach()).mean()
+        
+        self.actor_optimizer.zero_grad()
+        actor_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=1.0)  # Clip gradients
+        self.actor_optimizer.step()
+        
+        # ============ UPDATE CRITIC ============
+        predicted_values = self.critic(states_tensor)
+        critic_loss = F.mse_loss(predicted_values, returns_tensor)
+        
+        self.critic_optimizer.zero_grad()
+        critic_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)  # Clip gradients
+        self.critic_optimizer.step()
+        
+        return actor_loss.item(), critic_loss.item()
+        
+    def save(self, filepath, episode=None, metrics=None):
         """
-        Update actor and critic networks
-        To be implemented next
+        Save agent with full training state
+        
+        Args:
+            filepath: Path to save file
+            episode: Current episode number (optional)
+            metrics: Dictionary of training metrics (optional)
         """
-        pass
-    
-    def save(self, filepath):
-        """Save agent"""
-        torch.save({
+        checkpoint = {
             'actor_state_dict': self.actor.state_dict(),
             'critic_state_dict': self.critic.state_dict(),
-            'actor_optimizer': self.actor_optimizer.state_dict(),
-            'critic_optimizer': self.critic_optimizer.state_dict(),
-        }, filepath)
-    
+            'actor_optimizer_state_dict': self.actor_optimizer.state_dict(),
+            'critic_optimizer_state_dict': self.critic_optimizer.state_dict(),
+            'gamma': self.gamma,
+        }
+        
+        # Add optional metadata
+        if episode is not None:
+            checkpoint['episode'] = episode
+        if metrics is not None:
+            checkpoint['metrics'] = metrics
+        
+        torch.save(checkpoint, filepath)
+        print(f"✓ Saved checkpoint to {filepath}")
+
     def load(self, filepath):
-        """Load agent"""
+        """
+        Load agent and training state
+        
+        Args:
+            filepath: Path to checkpoint file
+        
+        Returns:
+            episode: Episode number (if saved)
+            metrics: Training metrics (if saved)
+        """
         checkpoint = torch.load(filepath)
+        
+        # Load networks
         self.actor.load_state_dict(checkpoint['actor_state_dict'])
         self.critic.load_state_dict(checkpoint['critic_state_dict'])
-        self.actor_optimizer.load_state_dict(checkpoint['actor_optimizer'])
-        self.critic_optimizer.load_state_dict(checkpoint['critic_optimizer'])
+        
+        # Load optimizers
+        self.actor_optimizer.load_state_dict(checkpoint['actor_optimizer_state_dict'])
+        self.critic_optimizer.load_state_dict(checkpoint['critic_optimizer_state_dict'])
+        
+        # Load hyperparameters
+        self.gamma = checkpoint.get('gamma', 0.99)
+        
+        # Return metadata
+        episode = checkpoint.get('episode', None)
+        metrics = checkpoint.get('metrics', None)
+        
+        print(f"✓ Loaded checkpoint from {filepath}")
+        if episode is not None:
+            print(f"  Resuming from episode {episode}")
+        
+        return episode, metrics
