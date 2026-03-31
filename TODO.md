@@ -12,10 +12,10 @@
 
 - [x] Define observation/action spaces
 - [x] Implement reset()
-- [ ] Implement step(action)
-- [ ] Implement observe(agent)
-- [ ] Handle action masking
-- [ ] Implement termination detection
+- [x] Implement step(action)
+- [x] Implement observe(agent)
+- [x] Handle action masking
+- [x] Implement termination detection
 
 ## Phase 3: Multi-Jump & Edge Cases
 
