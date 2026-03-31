@@ -2,7 +2,7 @@
 
 A custom implementation of 6x6 Checkers using PettingZoo's AEC API, trained with Actor-Critic self-play reinforcement learning using PyTorch.
 
-## 📁 Project Structure
+## Project Structure
 ```
 .
 ├── model/                          # Model checkpoints and training outputs
@@ -20,7 +20,7 @@ A custom implementation of 6x6 Checkers using PettingZoo's AEC API, trained with
 
 ---
 
-## 🎮 Environment Setup (`mycheckersenv.py`)
+## Environment Setup 
 
 ### **6x6 Checkers Environment**
 
@@ -43,25 +43,17 @@ Built using PettingZoo's AEC (Agent Environment Cycle) API for turn-based games.
 - Maximum 500 steps per game (prevents infinite games)
 
 **Action Space:**
-- `Discrete(1296)` - Encoded as: `from_row * 216 + from_col * 36 + to_row * 6 + to_col`
+- Discrete(1296) - Encoded as: from_row * 216 + from_col * 36 + to_row * 6 + to_col
 - Action masking ensures only valid moves are selected
 
 **Observation Space:**
-- `Dict` containing:
-  - `observation`: 6x6 board state
-  - `action_mask`: Binary mask of valid actions (1296 length)
 
-**Reward Function (Shaped):**
-- **Capture opponent piece:** +0.5
-- **King promotion:** +0.3
-- **Step penalty:** -0.01 (encourages efficiency)
-- **Win:** +1.0
-- **Loss:** -1.0
-- **Draw (max steps):** 0.0
+Dict containing:
+- observation: 6x6 board state
+- action_mask: Binary mask of valid actions (1296 length)
 
----
 
-## 🤖 Agent Architecture (`myagent.py`)
+## Agent Architecture 
 
 ### **Actor-Critic Neural Networks**
 
@@ -81,25 +73,28 @@ Input (36) → FC(128) → ReLU → FC(64) → ReLU → FC(1) → State Value
 - **Output:** Single value (expected cumulative reward)
 - **Purpose:** Evaluates how good a state is
 
-**Training Algorithm:**
-- **Policy Gradient** with advantage estimates
-- **Gradient Clipping:** max_norm=1.0 (prevents instability)
-- **Advantage Normalization:** Reduces variance
-- **Optimizers:** Adam for both networks
+**Actor-Critic Algorithm:**
+1. Select action using policy (actor)
+2. Observe reward and next state
+3. Compute advantage: `A = r + γ*V(s') - V(s)`
+4. Update actor: Maximize `log π(a|s) * A`
+5. Update critic: Minimize `(V(s) - G)²`
 
-**Key Methods:**
-- `select_action(state, action_mask, training)` - Choose action with masking
-- `get_value(state)` - Estimate state value
-- `update(states, actions, advantages, returns)` - Update both networks
-- `save(filepath)` / `load(filepath)` - Checkpoint management
+
+**Hyperparameter Tuning**
+
+- Learning Rates for Actor Critic Model
+- Gamma (Discount Factor)
+- Episode Limit
+
 
 ---
 
-## 🏃 Training Setup (`myrunner.py`)
+## Training Setup
 
-### **Configuration**
+**Configuration**
 
-All training parameters are defined at the top of `myrunner.py`:
+All training parameters are defined at the top of myrunner.py:
 ```python
 # MODEL CONFIG
 MODEL_NAME = "V1/"                    # Version name for organizing models
@@ -123,27 +118,9 @@ RESUME_FROM = None                    # Start fresh training
 - Learns by playing against itself
 - Improves strategy over time
 
-### **Training Process:**
 
-1. **Episode Loop:**
-   - Reset environment
-   - Play full game (both players use same agent)
-   - Collect experiences (states, actions, rewards, values)
 
-2. **Update Step:**
-   - Compute advantages (TD error)
-   - Compute returns (discounted rewards)
-   - Update actor network (policy gradient)
-   - Update critic network (value function MSE)
-
-3. **Checkpointing:**
-   - Save agent weights every `SAVE_INTERVAL` episodes
-   - Save training metrics (rewards, losses, lengths)
-   - Generate training curves plot
-
----
-
-## 🚀 Usage
+## Usage
 
 ### **1. Install Dependencies**
 ```bash
@@ -157,7 +134,7 @@ pip install -r requirements.txt
 - `numpy`
 - `matplotlib`
 
-### **2. Start Training (Fresh)**
+### **2. Start Training**
 ```bash
 python src/myrunner.py
 ```
@@ -194,7 +171,7 @@ ACTOR_LEARNING_RATE = 0.00005  # Different learning rate
 
 ---
 
-## 🎯 Model Files
+## Model Files
 
 **Checkpoint Structure:**
 
@@ -217,57 +194,13 @@ model/V1/
 └── training_curves.png      # Visualization
 ```
 
----
 
-## 🔧 Hyperparameter Tuning
-
-**Learning Rates:**
-- Start: `0.0001`
-- If unstable: decrease to `0.00005` or `0.00001`
-- If too slow: increase to `0.0005`
-
-**Gamma (Discount Factor):**
-- Default: `0.99` (values future rewards highly)
-- Short-term focus: `0.9`
-- Long-term focus: `0.995`
-
-**Episode Limit:**
-- Current: 500 steps max per game
-- Adjust in `mycheckersenv.py`: `self.max_steps = 500`
-
----
-
-## 📝 Implementation Details
-
-**Actor-Critic Algorithm:**
-1. Select action using policy (actor)
-2. Observe reward and next state
-3. Compute advantage: `A = r + γ*V(s') - V(s)`
-4. Update actor: Maximize `log π(a|s) * A`
-5. Update critic: Minimize `(V(s) - G)²`
-
-**Advantage Calculation:**
-- Uses TD (Temporal Difference) error
-- Normalized for stability
-- Reduces variance in policy gradient
-
-**Action Masking:**
-- Prevents invalid moves
-- Sets invalid action logits to `-1e8`
-- Ensures agent only samples legal moves
-
-
----
-
-## 📚 References
+## References
 
 - **PettingZoo Documentation:** https://pettingzoo.farama.org/
 - **Actor-Critic Methods:** Sutton & Barto, RL Book Chapter 13
 - **Policy Gradient:** https://spinningup.openai.com/en/latest/algorithms/vpg.html
 
----
 
-## 👤 Author
 
-rud-rax
 
