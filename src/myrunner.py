@@ -6,9 +6,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-# MODEL CONFIG 
+# MODEL CONFIG
 # ====================================
-MODEL_NAME = "V1/" 
+MODEL_NAME = "V1/"
 SAVE_MODEL_DIR = "model/" + MODEL_NAME
 
 ACTOR_LEARNING_RATE = 0.0001
@@ -304,13 +304,13 @@ def train(num_episodes=5000, save_interval=500, log_interval=100, resume_from=No
     return agent, episode_rewards, episode_lengths
 
 
-
-
-
 if __name__ == "__main__":
     os.makedirs(SAVE_MODEL_DIR + "checkpoints", exist_ok=True)
 
     # Train agent
     agent, rewards, lengths = train(
-        num_episodes=EPISODES, save_interval=SAVE_INTERVAL, log_interval=LOG_INTERVAL, resume_from="model/V1/checkpoints/agent_final.pth"
+        num_episodes=EPISODES,
+        save_interval=SAVE_INTERVAL,
+        log_interval=LOG_INTERVAL,
+        resume_from="model/V1/checkpoints/agent_final.pth",
     )
